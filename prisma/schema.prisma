@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- SISTEM PENGGUNA & AKSES ---
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  email         String       @unique
+  password      String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  profiles      Profile[]
+  ownedDepts    Departemen[] @relation("DeptCreator")
+  products      Product[]
+  sales         Sales[]
+  cashflows     CashFlow[]
+  messages      Message[]
+}
+
+model Departemen {
+  id          String   @id @default(cuid())
+  name        String
+  creator_id  String
+  creator     User     @relation("DeptCreator", fields: [creator_id], references: [id])
+  plan        String   @default("FREE")
+  isRequest   String[] // Array ID User yang minta gabung
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  expired_at  DateTime?
+
+  profiles    Profile[]
+  products    Product[]
+  sales       Sales[]
+  invoices    Invoice[]
+  cashflows   CashFlow[]
+  docs        StrukturDokumen[]
+  chats       Chat[]
+  taxes       TaxDepartement[]
+}
+
+model Profile {
+  id           String     @id @default(cuid())
+  idUser       String
+  idDepartemen String
+  role         String     @default("MEMBER")
+  isInvited    Json?      // Format: { creator_id: string }
+  user         User       @relation(fields: [idUser], references: [id])
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+}
+
+// --- MODUL STOK & PRODUK ---
+model Product {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  name         String
+  stok         Int        @default(0)
+  price        Float      // Harga Jual
+  hpp          Float      @default(0) // Harga Pokok Penjualan (Modal)
+  created_at   DateTime   @default(now())
+  
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+  user         User       @relation(fields: [idUser], references: [id])
+  sales        Sales[]
+
+  @@unique([name, idDepartemen], name: "id_name_dept")
+}
+
+// --- MODUL TRANSAKSI & INVOICE ---
+model Sales {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  idProduct    String
+  amount       Int        // Qty
+  totalPrice   Float      @default(0)
+  customerName String?    // Penting untuk CLV & Retensi
+  status       String     @default("Berhasil")
+  descriptions String?
+  created_at   DateTime   @default(now())
+
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+  user         User       @relation(fields: [idUser], references: [id])
+  product      Product    @relation(fields: [idProduct], references: [id])
+}
+
+model Invoice {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  dataItem     Json       // Menyimpan rincian item dalam format JSON
+  subTotal     Float
+  tax          Float      @default(0)
+  grandTotal   Float
+  created_at   DateTime   @default(now())
+
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+}
+
+// --- MODUL LAPORAN KEUANGAN & PAJAK ---
+model CashFlow {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  tanggal      DateTime   @default(now())
+  tipe         String     // "Pemasukan" atau "Pengeluaran"
+  kategori     String     // "Operasional", "Marketing", "Gaji", "HPP"
+  nominal      Float
+  keterangan   String?
+
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+  user         User       @relation(fields: [idUser], references: [id])
+}
+
+model Tax {
+  id         String           @id @default(cuid())
+  name       String
+  percentage Float
+  depts      TaxDepartement[]
+}
+
+model TaxDepartement {
+  id            String     @id @default(cuid())
+  tax_id        String
+  departemen_id String
+  is_activate   Boolean    @default(true)
+  tax           Tax        @relation(fields: [tax_id], references: [id])
+  departemen    Departemen @relation(fields: [departemen_id], references: [id])
+}
+
+// --- MODUL DOKUMEN & CHAT AI ---
+model StrukturDokumen {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  fileName     String
+  filePath     String
+  fileType     String     // .xlsx, .pdf, .csv
+  dataItem     Json?      // Hasil ekstraksi AI dari dokumen
+  created_at   DateTime   @default(now())
+
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+}
+
+model Chat {
+  id           String     @id @default(cuid())
+  idDepartemen String
+  idUser       String
+  topic        String
+  messages     Message[]
+  departemen   Departemen @relation(fields: [idDepartemen], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  idChat    String
+  idUser    String
+  content   String   // Pesan dari user atau AI
+  role      String   // "user" atau "assistant"
+  createdAt DateTime @default(now())
+
+  chat      Chat     @relation(fields: [idChat], references: [id])
+  user      User     @relation(fields: [idUser], references: [id])
+}

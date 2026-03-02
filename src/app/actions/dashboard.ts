@@ -1,77 +1,533 @@
-// src/app/actions/dashboard.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { decrypt } from "@/lib/session";
+import { revalidatePath } from "next/cache";
 
-export async function getDashboardMetrics() {
+// ================================
+// 🔐 Helper: get current user
+// ================================
+async function getCurrentUser() {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
   const session = await decrypt(sessionCookie);
-  const userId = session?.userId as string;
 
-  const sales = await prisma.sales.findMany({
-    where: { idUser: userId },
-    include: { product: true }
+  if (!session?.userId) throw new Error("Unauthorized");
+
+  const userProfile = await prisma.profile.findFirst({
+    where: { idUser: session.userId },
+    select: { idDepartemen: true },
   });
 
-  const cashflows = await prisma.cashFlow.findMany({
-    where: { idUser: userId }
-  });
-
-  const products = await prisma.product.findMany({
-    where: { idUser: userId }
-  });
-
-  // LOGIKA GRAFIK: Kelompokkan Pendapatan per Bulan
-  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
-  const chartData = months.map((month, index) => {
-    const total = sales
-      .filter(s => new Date(s.created_at).getMonth() === index)
-      .reduce((acc, curr) => acc + curr.totalPrice, 0);
-    return { name: month, pendapatan: total };
-  });
-
-  const totalPendapatan = sales.reduce((acc, curr) => acc + curr.totalPrice, 0);
-  const totalHPP = sales.reduce((acc, curr) => acc + (curr.amount * (curr.product?.hpp || 0)), 0);
-  const labaKotor = totalPendapatan - totalHPP;
-  const totalPengeluaran = cashflows.filter(cf => cf.tipe === "Pengeluaran").reduce((acc, curr) => acc + curr.nominal, 0);
-  const labaBersih = labaKotor - totalPengeluaran;
-  const totalStok = products.reduce((acc, curr) => acc + curr.stok, 0);
-  const uniqueCustomers = new Set(sales.map(s => s.customerName)).size;
-  const clv = uniqueCustomers > 0 ? totalPendapatan / uniqueCustomers : 0;
+  if (!userProfile) throw new Error("Departemen tidak ditemukan");
 
   return {
-    chartData,
-    labaKotor,
-    labaBersih,
-    totalPendapatan,
-    totalStok,
-    clv,
-    totalSales: sales.length,
+    userId: session.userId as string,
+    deptId: userProfile.idDepartemen,
   };
 }
 
-export async function resetDataAction() {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-    const session = await decrypt(sessionCookie);
-    const userId = session?.userId as string;
-    if (!userId) throw new Error("Sesi tidak valid.");
+// ================================
+// 📊 DASHBOARD METRICS
+// ================================
+export async function getDashboardMetrics() {
+  const { userId, deptId } = await getCurrentUser();
 
-    await prisma.$transaction([
-      prisma.sales.deleteMany({ where: { idUser: userId } }),
-      prisma.cashFlow.deleteMany({ where: { idUser: userId } }),
-      prisma.product.deleteMany({ where: { idUser: userId } }),
-    ]);
+  // 1. Total Pendapatan (Hanya transaksi yang Berhasil)
+  const salesAgg = await prisma.sales.aggregate({
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+    _sum: { totalPrice: true },
+  });
+  const totalPendapatan = salesAgg._sum.totalPrice || 0;
 
-    revalidatePath("/dashboard");
-    return { success: true };
-  } catch (error: any) {
-    console.error("Reset Data Error:", error);
-    return { success: false, message: error.message };
+  // 2. Total HPP (Modal barang yang terjual)
+  const sales = await prisma.sales.findMany({
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+    select: {
+      amount: true,
+      product: { select: { hpp: true } },
+    },
+  });
+
+  let totalHpp = 0;
+  for (const s of sales) {
+    totalHpp += (s.product?.hpp || 0) * (s.amount || 0);
   }
+
+  // 3. Laba Kotor = Pendapatan Kotor - Modal Barang
+  const labaKotor = totalPendapatan - totalHpp;
+
+ // 4. Hitung Total Pengeluaran dari Arus Kas
+  const pengeluaranAgg = await prisma.cashFlow.aggregate({
+    where: { idUser: userId, idDepartemen: deptId, tipe: "Pengeluaran" },
+    _sum: { nominal: true },
+  });
+  const totalPengeluaran = pengeluaranAgg._sum.nominal || 0;
+
+  // HAPUS BAGIAN PEMASUKAN TAMBAHAN KARENA MODAL AWAL BUKAN LABA!
+  // 5. Laba Bersih = Laba Kotor - Pengeluaran Operasional
+  const labaBersih = labaKotor - totalPengeluaran;
+
+  // 6. TOTAL KERUGIAN (Jika Laba Bersih minus)
+  const totalKerugian = labaBersih < 0 ? Math.abs(labaBersih) : 0;
+
+  // 7. Hitung Sisa Stok Barang
+  const stokAgg = await prisma.product.aggregate({
+    where: { idUser: userId, idDepartemen: deptId },
+    _sum: { stok: true },
+  });
+  const totalStok = stokAgg._sum.stok || 0;
+
+  // 8. CLV (Nilai Pelanggan)
+  const customerCount = await prisma.sales.groupBy({
+    by: ["customerName"],
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+  });
+  const clv = customerCount.length
+    ? Math.round(totalPendapatan / customerCount.length)
+    : 0;
+
+  // Kembalikan semua data ke Frontend
+  return {
+    totalPendapatan,
+    labaKotor,
+    labaBersih,
+    totalKerugian, // <-- Kita tambahkan ini untuk dikirim ke web
+    totalStok,
+    clv,
+  };
+}
+
+export async function getAvailableYears() {
+  const { userId, deptId } = await getCurrentUser();
+
+  const sales = await prisma.sales.findMany({
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+    select: { created_at: true },
+    orderBy: { created_at: "desc" }, // Urutkan dari terbaru
+  });
+
+  // Gunakan Set untuk mendapatkan tahun unik
+  const years = new Set<number>();
+  sales.forEach((s) => {
+    const y = new Date(s.created_at).getFullYear();
+    if (!isNaN(y)) years.add(y);
+  });
+
+  // Kembalikan dalam bentuk array [2026, 2025, 2024]
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+// ================================
+// 📈 REVENUE CHART (SMART RANGE)
+// ================================
+export async function getRevenueChart(range: string) {
+  const { userId, deptId } = await getCurrentUser();
+
+  const allSales = await prisma.sales.findMany({
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+    select: {
+      created_at: true,
+      totalPrice: true,
+    },
+    orderBy: { created_at: "asc" },
+  });
+
+  if (!allSales.length) return [];
+
+  const latestDate = new Date(allSales[allSales.length - 1].created_at);
+  const now = new Date();
+  // =====================================
+  // 🔹 BULAN INI → per HARI
+  // =====================================
+  if (range === "bulan") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const daysInMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+    ).getDate();
+    const grouped: Record<number, number> = {};
+
+    for (const s of allSales) {
+      const d = new Date(s.created_at);
+      if (d < start) continue;
+
+      const day = d.getDate();
+      grouped[day] = (grouped[day] || 0) + (s.totalPrice || 0);
+    }
+
+    const result: { date: string; total: number }[] = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      // LOGIKA BARU: Hanya masukkan jika nilainya lebih dari 0
+      if (grouped[i] && grouped[i] > 0) {
+        result.push({ date: String(i), total: grouped[i] });
+      }
+    }
+    return result;
+  }
+
+  // =====================================
+  // 🔹 3 BULAN TERAKHIR
+  // =====================================
+  if (range === "3bulan") {
+    const end = new Date(latestDate);
+    const start = new Date(end.getFullYear(), end.getMonth() - 2, 1);
+    const grouped: Record<string, number> = {};
+
+    for (const s of allSales) {
+      const d = new Date(s.created_at);
+      if (d < start || d > end) continue;
+
+      const key = d.toLocaleDateString("id-ID", {
+        month: "short",
+        year: "numeric",
+      });
+      grouped[key] = (grouped[key] || 0) + (s.totalPrice || 0);
+    }
+
+    return Object.entries(grouped)
+      .map(([date, total]) => ({ date, total }))
+      .filter((item) => item.total > 0); // LOGIKA BARU
+  }
+
+  // =====================================
+  // 🔹 JIKA RANGE ADALAH TAHUN SPESIFIK (Misal: "2025")
+  // =====================================
+  const isYear = /^\d{4}$/.test(range);
+
+  if (isYear) {
+    const targetYear = parseInt(range);
+    const grouped: Record<number, number> = {};
+
+    for (const s of allSales) {
+      const d = new Date(s.created_at);
+      if (d.getFullYear() !== targetYear) continue;
+
+      const month = d.getMonth(); // 0 = Jan, 11 = Des
+      grouped[month] = (grouped[month] || 0) + (s.totalPrice || 0);
+    }
+
+    const result: { date: string; total: number }[] = [];
+    // Looping 12 bulan
+    for (let m = 0; m <= 11; m++) {
+      if (grouped[m] && grouped[m] > 0) {
+        // Hanya tampilkan bulan yang ada datanya
+        const label = new Date(targetYear, m, 1).toLocaleDateString("id-ID", {
+          month: "short",
+          year: "numeric",
+        });
+        result.push({ date: label, total: grouped[m] });
+      }
+    }
+    return result;
+  }
+
+  // =====================================
+  // 🔹 SEMUA DATA (Default)
+  // =====================================
+  const grouped: Record<string, number> = {};
+
+  for (const s of allSales) {
+    const d = new Date(s.created_at);
+    const key = d.toLocaleDateString("id-ID", {
+      month: "short",
+      year: "numeric",
+    });
+    grouped[key] = (grouped[key] || 0) + (s.totalPrice || 0);
+  }
+
+  return Object.entries(grouped)
+    .map(([date, total]) => ({ date, total }))
+    .filter((item) => item.total > 0);
+}
+
+// ================================
+// 🧹 RESET DATA
+// ================================
+export async function resetDataAction() {
+  const { userId, deptId } = await getCurrentUser();
+
+  await prisma.$transaction([
+    prisma.sales.deleteMany({
+      where: { idUser: userId, idDepartemen: deptId },
+    }),
+    prisma.cashFlow.deleteMany({
+      where: { idUser: userId, idDepartemen: deptId },
+    }),
+    prisma.product.deleteMany({
+      where: { idUser: userId, idDepartemen: deptId },
+    }),
+  ]);
+
+  revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
+export async function createTransactionAction(data: {
+  customerName: string;
+  productId: string;
+  amount: number;
+}) {
+  const { userId, deptId } = await getCurrentUser();
+
+  // Cari harga satuan produk dari database
+  const product = await prisma.product.findUnique({
+    where: { id: data.productId },
+  });
+
+  if (!product) throw new Error("Produk tidak ditemukan");
+  if (product.stok < data.amount) throw new Error("Stok barang tidak mencukupi!");
+
+  const totalPrice = (product.price || 0) * data.amount;
+
+  // Gunakan Transaction untuk memastikan Data Penjualan masuk & Stok berkurang
+  await prisma.$transaction([
+    prisma.sales.create({
+      data: {
+        idUser: userId,
+        idDepartemen: deptId,
+        idProduct: data.productId,
+        customerName: data.customerName || "Pelanggan Umum",
+        amount: data.amount,
+        totalPrice: totalPrice,
+        status: "Berhasil",
+        created_at: new Date(),
+      },
+    }),
+    prisma.product.update({
+      where: { id: data.productId },
+      data: { stok: { decrement: data.amount } },
+    }),
+  ]);
+
+  revalidatePath("/dashboard/transaksi");
+  return { success: true };
+}
+
+export async function deleteTransactionAction(
+  transactionId: string, 
+  productId: string, 
+  amount: number
+) {
+  const { userId, deptId } = await getCurrentUser();
+
+  // Gunakan Transaction agar jika satu gagal, gagal semua (aman)
+  await prisma.$transaction([
+    prisma.sales.delete({
+      where: { id: transactionId, idUser: userId, idDepartemen: deptId },
+    }),
+    prisma.product.update({
+      where: { id: productId },
+      data: { stok: { increment: amount } }, // Kembalikan stok yang terpotong
+    }),
+  ]);
+
+  revalidatePath("/dashboard/transaksi");
+  return { success: true };
+}
+
+export async function updateTransactionAction(
+  transactionId: string,
+  newData: { customerName: string; productId: string; amount: number },
+  oldData: { productId: string; amount: number }
+) {
+  const { userId, deptId } = await getCurrentUser();
+
+  const newProduct = await prisma.product.findUnique({ where: { id: newData.productId } });
+  if (!newProduct) throw new Error("Produk tidak ditemukan");
+
+  const queries: any[] = [];
+
+  // LOGIKA STOK: Jika produk yang diedit BERBEDA dengan produk sebelumnya
+  if (newData.productId !== oldData.productId) {
+    if (newProduct.stok < newData.amount) throw new Error("Stok barang baru tidak mencukupi!");
+    
+    // 1. Kembalikan stok produk lama
+    queries.push(prisma.product.update({
+      where: { id: oldData.productId },
+      data: { stok: { increment: oldData.amount } },
+    }));
+    // 2. Potong stok produk baru
+    queries.push(prisma.product.update({
+      where: { id: newData.productId },
+      data: { stok: { decrement: newData.amount } },
+    }));
+  } 
+  // LOGIKA STOK: Jika produk SAMA, tapi jumlah (qty) diubah
+  else if (newData.amount !== oldData.amount) {
+    const selisih = newData.amount - oldData.amount; // Jika positif berarti nambah pesanan, jika negatif ngurangin
+    if (selisih > 0 && newProduct.stok < selisih) throw new Error("Sisa stok tidak mencukupi untuk tambahan ini!");
+    
+    queries.push(prisma.product.update({
+      where: { id: newData.productId },
+      data: { stok: { decrement: selisih } }, // decrement bisa menerima angka negatif (otomatis jadi increment)
+    }));
+  }
+
+  const totalPrice = (newProduct.price || 0) * newData.amount;
+
+  // Update Data Transaksi
+  queries.push(prisma.sales.update({
+    where: { id: transactionId, idUser: userId, idDepartemen: deptId },
+    data: {
+      customerName: newData.customerName || "Pelanggan Umum",
+      idProduct: newData.productId,
+      amount: newData.amount,
+      totalPrice: totalPrice,
+    },
+  }));
+
+  await prisma.$transaction(queries);
+  revalidatePath("/dashboard/transaksi");
+  return { success: true };
+}
+
+// ================================
+// 🗑️ HAPUS MASSAL (BULK DELETE)
+// ================================
+export async function bulkDeleteTransactionAction(
+  items: { id: string; productId: string; amount: number }[]
+) {
+  const { userId, deptId } = await getCurrentUser();
+  const queries: any[] = [];
+
+  for (const item of items) {
+    // 1. Hapus transaksi
+    queries.push(prisma.sales.delete({
+      where: { id: item.id, idUser: userId, idDepartemen: deptId },
+    }));
+    // 2. Kembalikan stok
+    queries.push(prisma.product.update({
+      where: { id: item.productId },
+      data: { stok: { increment: item.amount } },
+    }));
+  }
+
+  await prisma.$transaction(queries);
+  revalidatePath("/dashboard/transaksi");
+  return { success: true };
+}
+
+
+
+
+// ##########################################################
+// STOK
+export async function createProductAction(data: { name: string; stok: number; hpp: number; price: number }) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.product.create({
+    data: {
+      idUser: userId,
+      idDepartemen: deptId,
+      name: data.name,
+      stok: data.stok,
+      hpp: data.hpp,
+      price: data.price,
+    }
+  });
+  revalidatePath("/dashboard/stok");
+  return { success: true };
+}
+
+export async function updateProductAction(id: string, data: { name: string; stok: number; hpp: number; price: number }) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.product.update({
+    where: { id, idUser: userId, idDepartemen: deptId },
+    data: {
+      name: data.name,
+      stok: data.stok,
+      hpp: data.hpp,
+      price: data.price,
+    }
+  });
+  revalidatePath("/dashboard/stok");
+  return { success: true };
+}
+
+export async function deleteProductAction(id: string) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.product.delete({
+    where: { id, idUser: userId, idDepartemen: deptId },
+  });
+  revalidatePath("/dashboard/stok");
+  return { success: true };
+}
+
+export async function bulkDeleteProductAction(ids: string[]) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.product.deleteMany({
+    where: { id: { in: ids }, idUser: userId, idDepartemen: deptId },
+  });
+  revalidatePath("/dashboard/stok");
+  return { success: true };
+}
+
+// ================================
+// ⚡ TAMBAH STOK CEPAT (QUICK ADD)
+// ================================
+export async function addStockAction(id: string, amountToAdd: number) {
+  const { userId, deptId } = await getCurrentUser();
+  
+  await prisma.product.update({
+    where: { id, idUser: userId, idDepartemen: deptId },
+    data: { stok: { increment: amountToAdd } },
+  });
+  
+  revalidatePath("/dashboard/stok");
+  return { success: true };
+}
+
+
+export async function createCashFlowAction(data: { tipe: string; kategori: string; nominal: number; keterangan: string; tanggal: string }) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.cashFlow.create({
+    data: {
+      idUser: userId,
+      idDepartemen: deptId,
+      tipe: data.tipe,
+      kategori: data.kategori,
+      nominal: data.nominal,
+      keterangan: data.keterangan || "-",
+      tanggal: new Date(data.tanggal),
+    }
+  });
+  revalidatePath("/dashboard/laporan");
+  return { success: true };
+}
+
+export async function updateCashFlowAction(id: string, data: { tipe: string; kategori: string; nominal: number; keterangan: string; tanggal: string }) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.cashFlow.update({
+    where: { id, idUser: userId, idDepartemen: deptId },
+    data: {
+      tipe: data.tipe,
+      kategori: data.kategori,
+      nominal: data.nominal,
+      keterangan: data.keterangan,
+      tanggal: new Date(data.tanggal),
+    }
+  });
+  revalidatePath("/dashboard/laporan");
+  return { success: true };
+}
+
+export async function deleteCashFlowAction(id: string) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.cashFlow.delete({
+    where: { id, idUser: userId, idDepartemen: deptId },
+  });
+  revalidatePath("/dashboard/laporan");
+  return { success: true };
+}
+
+export async function bulkDeleteCashFlowAction(ids: string[]) {
+  const { userId, deptId } = await getCurrentUser();
+  await prisma.cashFlow.deleteMany({
+    where: { id: { in: ids }, idUser: userId, idDepartemen: deptId },
+  });
+  revalidatePath("/dashboard/laporan");
+  return { success: true };
 }

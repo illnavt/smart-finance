@@ -1,13 +1,10 @@
-// src/app/dashboard/layout.tsx
 import Link from "next/link";
-import { 
-  LayoutDashboard, Receipt, FileText, BrainCircuit, 
-  LineChart, Package, Search, Bell, UserCircle 
-} from "lucide-react"; // <-- SUDAH DIPERBAIKI
 import Image from "next/image";
+import { Search, Bell, UserCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { decrypt } from "@/lib/session";
+import SidebarNav from "@/components/dashboard/SidebarNav"; // <--- IMPORT INI
 
 export default async function DashboardLayout({
   children,
@@ -17,17 +14,22 @@ export default async function DashboardLayout({
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
   const session = await decrypt(sessionCookie);
-  const userEmail = session?.email as string;
   const userId = session?.userId as string;
 
+  // Ambil email dari database agar tidak blank jika session email kosong
+  const userData = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true }
+  });
+  const userEmail = userData?.email || (session?.email as string) || "admin@sistem.com";
+
   const hasData = await prisma.product.findFirst({
-    where: { idUser: userId }
+    where: { idUser: userId },
   });
 
-  // LOGIKA: Jika file belum ada, layout tidak muncul
   if (!hasData) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-[#e8f7ec] via-[#f2fdf5] to-[#d1f5de]">
+      <div className="min-h-screen bg-gradient-to-br from-[#e8f7ec] via-[#f2fdf5] to-[#d1f5de]">
         <main className="w-full flex items-center justify-center min-h-screen">
           {children}
         </main>
@@ -36,74 +38,57 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans">
-      
-      {/* SIDEBAR KIRI (Sudah diperbaiki css conflict-nya) */}
-      <aside className="w-64 bg-[#0a3d4d] text-white flex-col shadow-xl z-20 hidden md:flex">
-        <div className="h-20 flex items-center px-8 border-b border-white/10">
-          <Image 
-            src="/images/logo.png" 
-            alt="Ke-Pin Logo" 
-            width={120} 
-            height={40} 
-            className="h-8 w-auto brightness-0 invert object-contain"
-          />
+    <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans selection:bg-[#29a343]/30">
+      <aside className="w-[280px] bg-[#0a3d4d] text-white flex flex-col shadow-2xl z-20 hidden md:flex relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+
+        <div className="h-24 flex items-center justify-center border-b border-white/5 relative z-10">
+          <Image src="/images/logo.png" alt="Ke-Pin Logo" width={140} height={45} className="brightness-0 invert object-contain drop-shadow-md" />
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-          <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Modul Utama</p>
-          <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 bg-[#29a343] text-white rounded-xl font-medium">
-            <LayoutDashboard size={20} /> Dashboard
-          </Link>
-          <Link href="/dashboard/transaksi" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/10 rounded-xl">
-            <Receipt size={20} /> Transaksi
-          </Link>
-          <Link href="/dashboard/stok" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-white/10 rounded-xl">
-            <Package size={20} /> Stok Barang
-          </Link>
-        </nav>
+        {/* PANGGIL KOMPONEN NAVIGASI DI SINI */}
+        <SidebarNav />
 
-        {/* User Profile (Hanya Email) */}
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl">
-            <UserCircle size={32} className="text-[#94cd28]" />
-            <div className="overflow-hidden">
-              <p className="text-[10px] text-gray-300 truncate">{userEmail}</p>
+        <div className="p-6 relative z-10 border-t border-white/5">
+          <div className="flex items-center gap-3 bg-black/20 hover:bg-black/30 transition-colors p-3.5 rounded-2xl cursor-pointer border border-white/5 group">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#94cd28] to-[#29a343] flex items-center justify-center shadow-inner">
+              <UserCircle size={24} className="text-white" />
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-xs font-semibold text-white truncate group-hover:text-[#94cd28] transition-colors">{userEmail}</p>
+              <p className="text-[10px] text-gray-400 truncate">Administrator</p>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* AREA KANAN */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 z-10 sticky top-0">
-          <div className="relative w-full max-w-md hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Cari..." 
-              className="w-full bg-gray-100 border-none rounded-full py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#29a343]/50"
-            />
+      {/* SISA KODE HEADER & MAIN (SAMA SEPERTI SEBELUMNYA) */}
+      <div className="flex-1 flex flex-col overflow-hidden relative bg-[#f8fafc]">
+        <header className="h-24 bg-white/70 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-8 z-10 sticky top-0">
+          <div className="relative w-full max-w-md hidden sm:block group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#29a343] transition-colors" size={18} />
+            <input type="text" placeholder="Pencarian cepat..." className="w-full bg-gray-50/50 hover:bg-gray-100/50 border border-gray-100 rounded-2xl py-3 pl-12 pr-4 text-sm focus:bg-white focus:ring-4 focus:ring-[#29a343]/10 focus:border-[#29a343]/30 transition-all outline-none" />
           </div>
 
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="relative p-2 text-gray-400 hover:text-[#0a3d4d]">
+          <div className="flex items-center gap-6 ml-auto">
+            <button className="relative p-2.5 text-gray-400 hover:text-[#0a3d4d] hover:bg-gray-100 rounded-xl transition-all">
               <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_0_2px_white]" />
             </button>
-            <div className="h-8 w-px bg-gray-200 mx-2"></div>
-            <div className="flex items-center gap-2">
+            <div className="h-8 w-px bg-gray-200" />
+            <div className="flex items-center gap-3 cursor-pointer group">
               <div className="text-right hidden md:block">
-                <p className="text-xs text-gray-500">{userEmail}</p>
+                <p className="text-sm font-bold text-[#0a3d4d] group-hover:text-[#29a343] transition-colors">{userEmail?.split("@")[0] || "User"}</p>
+                <p className="text-[10px] font-medium text-gray-400">Active Session</p>
               </div>
-              <div className="w-10 h-10 bg-linear-to-br from-[#94cd28] to-[#29a343] rounded-full flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
-                {userEmail?.substring(0, 2).toUpperCase()}
+              <div className="w-11 h-11 bg-gradient-to-br from-[#94cd28] to-[#29a343] rounded-2xl flex items-center justify-center text-white font-bold shadow-md shadow-[#29a343]/20 group-hover:scale-105 transition-transform border-2 border-white">
+                {userEmail?.substring(0, 2).toUpperCase() || "US"}
               </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative p-6">
+        <main className="flex-1 overflow-y-auto relative p-8">
           {children}
         </main>
       </div>

@@ -38,12 +38,33 @@ function cleanNumber(val: any): number {
 /**
  * FUNGSI PINTAR: Konversi tanggal
  */
+/**
+ * FUNGSI PINTAR: Konversi tanggal dengan dukungan DD/MM/YYYY
+ */
 function parseExcelDate(excelDate: any) {
   if (!excelDate) return new Date();
-  let date =
-    typeof excelDate === "number"
-      ? new Date(Math.round((excelDate - 25569) * 86400 * 1000))
-      : new Date(excelDate);
+
+  // 1. Jika dibaca Excel sebagai Serial Number (angka)
+  if (typeof excelDate === "number") {
+    return new Date(Math.round((excelDate - 25569) * 86400 * 1000));
+  }
+
+  // 2. Jika dibaca sebagai Teks (contoh: "24/09/2025")
+  if (typeof excelDate === "string") {
+    const parts = excelDate.split("/");
+    // Cek apakah formatnya dipisah garis miring dan ada 3 bagian
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // Di JavaScript, bulan dimulai dari 0 (Jan = 0)
+      const year = parseInt(parts[2], 10);
+      
+      const parsedDate = new Date(year, month, day);
+      if (!isNaN(parsedDate.getTime())) return parsedDate;
+    }
+  }
+
+  // 3. Fallback bawaan
+  let date = new Date(excelDate);
   return isNaN(date.getTime()) ? new Date() : date;
 }
 

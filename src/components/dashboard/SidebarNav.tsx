@@ -18,9 +18,8 @@ export default function SidebarNav() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Transaksi", href: "/dashboard/transaksi", icon: Receipt },
     { name: "Laporan Keuangan", href: "/dashboard/laporan", icon: FileText },
-    { name: "Prediksi AI", href: "/dashboard/prediksi", icon: BrainCircuit },
+    { name: "Prediksi AI", href: "/dashboard/analitik", icon: BrainCircuit },
     { name: "Stok Barang", href: "/dashboard/stok", icon: Package },
-    { name: "Analitik", href: "/dashboard/analitik", icon: LineChart },
   ];
 
   return (
@@ -30,7 +29,6 @@ export default function SidebarNav() {
       </p>
 
       {navItems.map((item) => {
-        // Logika agar deteksi rute akurat
         const isActive =
           item.href === "/dashboard"
             ? pathname === "/dashboard"
@@ -38,7 +36,7 @@ export default function SidebarNav() {
 
         return (
           <Link
-            key={item.name}
+            key={item.name} 
             href={item.href}
             className={`group flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 ${
               isActive

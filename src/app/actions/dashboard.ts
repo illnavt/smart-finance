@@ -531,3 +531,113 @@ export async function bulkDeleteCashFlowAction(ids: string[]) {
   revalidatePath("/dashboard/laporan");
   return { success: true };
 }
+
+// ================================
+// 🤖 PREDIKSI AI (ANALITIK)
+// ================================
+export async function getAIPredictionAction(yearsAhead: number) {
+  const { userId, deptId } = await getCurrentUser();
+
+  // 1. Ambil data transaksi mentah
+  const sales = await prisma.sales.findMany({
+    where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
+    select: { created_at: true, totalPrice: true },
+    orderBy: { created_at: "asc" }
+  });
+
+  const cashFlows = await prisma.cashFlow.findMany({
+    where: { idUser: userId, idDepartemen: deptId, tipe: "Pengeluaran" },
+    select: { tanggal: true, nominal: true },
+    orderBy: { tanggal: "asc" }
+  });
+
+  // 2. Kelompokkan berdasarkan Tahun
+  const yearlyData: Record<number, { revenue: number; expense: number }> = {};
+  
+  sales.forEach(s => {
+    const y = new Date(s.created_at).getFullYear();
+    if (!yearlyData[y]) yearlyData[y] = { revenue: 0, expense: 0 };
+    yearlyData[y].revenue += (s.totalPrice || 0);
+  });
+
+  cashFlows.forEach(c => {
+    const y = new Date(c.tanggal).getFullYear();
+    if (!yearlyData[y]) yearlyData[y] = { revenue: 0, expense: 0 };
+    yearlyData[y].expense += (c.nominal || 0);
+  });
+
+  // 3. Konversi ke Array dan urutkan
+  const history = Object.keys(yearlyData)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map(y => ({
+      year: y,
+      actualRevenue: yearlyData[y].revenue,
+      actualExpense: yearlyData[y].expense,
+      predictedRevenue: null as number | null, // null untuk grafik
+      predictedExpense: null as number | null,
+    }));
+
+  // Jika data kosong, beri data default agar grafik tidak rusak
+  if (history.length === 0) {
+    history.push({ year: new Date().getFullYear(), actualRevenue: 0, actualExpense: 0, predictedRevenue: null, predictedExpense: null });
+  }
+
+  // 4. Kalkulasi Tingkat Pertumbuhan (MOCK AI LOGIC)
+  // Untuk contoh ini, jika data < 2 tahun, kita asumsikan pertumbuhan optimis 15% per tahun
+  let revGrowth = 0.15; 
+  let expGrowth = 0.08; 
+
+  if (history.length > 1) {
+    const first = history[0];
+    const last = history[history.length - 1];
+    const yearDiff = last.year - first.year;
+    
+    if (first.actualRevenue > 0 && yearDiff > 0) {
+      revGrowth = Math.pow(last.actualRevenue / first.actualRevenue, 1 / yearDiff) - 1;
+    }
+    if (first.actualExpense > 0 && yearDiff > 0) {
+      expGrowth = Math.pow(last.actualExpense / first.actualExpense, 1 / yearDiff) - 1;
+    }
+  }
+
+  // Batasi pertumbuhan tidak masuk akal (Min -10%, Max 40%)
+  revGrowth = Math.max(-0.10, Math.min(revGrowth, 0.40));
+  expGrowth = Math.max(0.02, Math.min(expGrowth, 0.20));
+
+  // 5. GENERATE PREDIKSI MASA DEPAN
+  const lastData = history[history.length - 1];
+  let currentRev = lastData.actualRevenue || 10000000; // Fallback jika 0
+  let currentExp = lastData.actualExpense || 5000000;
+
+  // Titik sambung (Connecting Point) untuk grafik
+  lastData.predictedRevenue = lastData.actualRevenue;
+  lastData.predictedExpense = lastData.actualExpense;
+
+  const predictions = [];
+  for (let i = 1; i <= yearsAhead; i++) {
+    // Tambahkan sedikit noise/variasi acak agar terlihat seperti simulasi AI organik (-3% hingga +3%)
+    const noiseR = 1 + (Math.random() * 0.06 - 0.03);
+    const noiseE = 1 + (Math.random() * 0.04 - 0.02);
+
+    currentRev = currentRev * (1 + revGrowth) * noiseR;
+    currentExp = currentExp * (1 + expGrowth) * noiseE;
+
+    predictions.push({
+      year: lastData.year + i,
+      actualRevenue: null,
+      actualExpense: null,
+      predictedRevenue: Math.round(currentRev),
+      predictedExpense: Math.round(currentExp),
+    });
+  }
+
+  return {
+    chartData: [...history, ...predictions],
+    metrics: {
+      cagr: (revGrowth * 100).toFixed(1),
+      projectedRevenue: currentRev,
+      projectedProfit: currentRev - currentExp,
+    }
+  };
+}

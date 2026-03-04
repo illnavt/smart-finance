@@ -14,10 +14,9 @@ import {
   Target,
   BrainCircuit,
   BarChart3,
-  LogOut,
+  Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-// 1. UPDATE IMPORT RECHARTS DI SINI
+import { useEffect, useState, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -33,16 +32,19 @@ import {
   getRevenueChart,
   getAvailableYears,
   resetDataAction,
+  getRealAISuggestions
 } from "@/app/actions/dashboard";
-import { logoutAction } from "@/app/actions/auth-actions";
+import Link from "next/link";
 
 export default function DashboardMetrics({ userId }: { userId: string }) {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
   const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [range, setRange] = useState("");
+  const [range, setRange] = useState("semua");
   const [chartData, setChartData] = useState<any[]>([]);
+
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -75,6 +77,64 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
     fetchChart();
   }, [range]);
 
+  const handleResetData = async () => {
+    setIsResetting(true);
+    try {
+      await resetDataAction();
+      setIsResetModalOpen(false);
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.error("Error resetting data:", error);
+      setIsResetting(false);
+    }
+  };
+
+  // =======================================================
+  // 1. PINDAHKAN USEMEMO KE SINI (Di atas blok if loading)
+  // =======================================================
+  const aiSuggestions = useMemo(() => {
+    if (!metrics) return [];
+    const hints = [];
+
+    // Analisis Profitabilitas
+    if (metrics.totalKerugian > 0) {
+      hints.push(
+        "Terdeteksi kerugian operasional. Tinjau kembali pos pengeluaran operasional terbesar Anda bulan ini.",
+      );
+    } else if (metrics.labaBersih > 0) {
+      hints.push(
+        "Laba bersih positif dan sehat. Pertahankan rasio pengeluaran dan strategi penjualan saat ini.",
+      );
+    }
+
+    // Analisis Stok
+    if (metrics.totalStok < 100) {
+      hints.push(
+        "Peringatan: Total fisik barang menipis. Segera lakukan pemesanan ulang (restock) untuk produk terlaris.",
+      );
+    } else {
+      hints.push(
+        "Kapasitas stok gudang secara keseluruhan dalam batas aman untuk memenuhi permintaan pasar.",
+      );
+    }
+
+    // Analisis Retensi & Pelanggan (CLV)
+    if (metrics.clv > 50000) {
+      hints.push(
+        "Nilai LTV pelanggan cukup tinggi. Tawarkan program loyalitas untuk mempertahankan pelanggan VIP Anda.",
+      );
+    } else {
+      hints.push(
+        "Tingkatkan promosi *bundling* untuk mendorong pelanggan berbelanja lebih banyak per transaksi.",
+      );
+    }
+
+    return hints.slice(0, 3);
+  }, [metrics]);
+
+  // =======================================================
+  // 2. EARLY RETURN TETAP BERADA DI BAWAH SEMUA HOOKS
+  // =======================================================
   if (loading && !metrics)
     return (
       <div className="p-10 text-center animate-pulse font-bold text-[#0a3d4d]">
@@ -82,6 +142,9 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
       </div>
     );
 
+  // =======================================================
+  // 3. VARIABEL YANG BERGANTUNG PADA DATA (metrics.xxx) DI BAWAHNYA
+  // =======================================================
   const kpiData = [
     {
       title: "Laba Kotor",
@@ -115,7 +178,8 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
       bg: "bg-cyan-100",
       trend: "Stabil",
     },
-    {title: "Total Profit",
+    {
+      title: "Total Profit",
       value: metrics.labaKotor,
       icon: <PieChart />,
       color: "text-teal-600",
@@ -124,7 +188,7 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
     },
     {
       title: "Total Kerugian",
-      value: metrics.totalKerugian, // <--- UBAH DI SINI
+      value: metrics.totalKerugian,
       icon: <ArrowUpRight className="rotate-90" />,
       color: "text-red-600",
       bg: "bg-red-100",
@@ -207,35 +271,17 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
           </select>
 
           <button
-            onClick={async () => {
-              if (
-                confirm(
-                  "Apakah Anda yakin ingin menghapus seluruh data dan kembali ke halaman upload?"
-                )
-              ) {
-                await resetDataAction();
-              }
-            }}
+            onClick={() => setIsResetModalOpen(true)}
             className="flex items-center gap-2 bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white px-5 py-2 rounded-xl font-bold transition-all duration-300 cursor-pointer active:scale-95 border border-amber-100"
           >
             <Trash2 size={18} />
             <span className="hidden sm:inline">Reset Data</span>
           </button>
-
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-5 py-2 rounded-xl font-bold transition-all duration-300 border border-red-100"
-            >
-              <LogOut size={18} />
-              <span>Keluar</span>
-            </button>
-          </form>
         </div>
       </div>
 
       {/* ================= MODERN CHART SECTION ================= */}
-      <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm h-[450px]">
+      <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm h-112.5">
         {chartData.length === 0 && !loading ? (
           <div className="h-full w-full flex items-center justify-center flex-col text-gray-400">
             <BarChart3 size={48} className="mb-2 opacity-50" />
@@ -243,15 +289,17 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              {/* 2. DEFINISI GRADASI WARNA */}
+            <AreaChart
+              data={chartData}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            >
               <defs>
                 <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#29a343" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#29a343" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              
+
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
@@ -269,18 +317,22 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
                 tickLine={false}
                 tick={{ fontSize: 12, fill: "#9ca3af", fontWeight: 500 }}
                 tickFormatter={(value) =>
-                  `Rp${value >= 1000000 ? (value / 1000000).toFixed(1) + "M" : (value >= 1000 ? (value / 1000).toFixed(0) + "K" : value)}`
+                  `Rp${value >= 1000000 ? (value / 1000000).toFixed(1) + "M" : value >= 1000 ? (value / 1000).toFixed(0) + "K" : value}`
                 }
               />
               <Tooltip
-                cursor={{ stroke: '#29a343', strokeWidth: 1, strokeDasharray: '4 4' }}
+                cursor={{
+                  stroke: "#29a343",
+                  strokeWidth: 1,
+                  strokeDasharray: "4 4",
+                }}
                 contentStyle={{
                   borderRadius: "1rem",
                   border: "none",
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                   padding: "12px 20px",
                   fontWeight: "bold",
-                  color: "#0a3d4d"
+                  color: "#0a3d4d",
                 }}
                 formatter={(value: number | undefined) => [
                   new Intl.NumberFormat("id-ID", {
@@ -291,16 +343,15 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
                   "Pendapatan",
                 ]}
               />
-              {/* 3. KOMPONEN AREA (GARIS MELENGKUNG + GRADASI) */}
               <Area
-                type="monotone" // Membuat garis melengkung/smooth
+                type="monotone"
                 dataKey="total"
                 stroke="#29a343"
-                strokeWidth={4} // Ketebalan garis utama
+                strokeWidth={4}
                 fillOpacity={1}
-                fill="url(#colorTotal)" // Menggunakan efek gradasi dari <defs>
+                fill="url(#colorTotal)"
                 animationDuration={1500}
-                activeDot={{ r: 6, strokeWidth: 0, fill: '#0a3d4d' }} // Titik saat di hover
+                activeDot={{ r: 6, strokeWidth: 0, fill: "#0a3d4d" }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -310,29 +361,54 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
       {/* ================= BOTTOM GRID ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* AI CARD LEFT */}
-        <div className="lg:col-span-4 bg-[#0a3d4d] p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+        <div className="lg:col-span-4 bg-linear-to-br from-[#0a3d4d] to-[#062630] p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group flex flex-col">
+          {/* Efek Cahaya Latar */}
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#29a343]/20 rounded-full blur-3xl group-hover:bg-[#94cd28]/30 transition-all duration-700"></div>
 
           <div className="relative z-10 flex flex-col h-full">
-            <div className="bg-[#29a343] w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
-              <BrainCircuit className="text-white" size={24} />
+            <div className="flex items-center justify-between mb-6">
+              <div className="bg-[#29a343] w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg">
+                <BrainCircuit className="text-white" size={24} />
+              </div>
+              <span className="bg-[#29a343]/20 text-[#94cd28] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse border border-[#29a343]/30">
+                Live Analysis
+              </span>
             </div>
 
-            <h4 className="text-white font-black text-2xl mb-4">
+            <h4 className="text-white font-black text-2xl mb-5">
               Saran AI Pintar
             </h4>
 
-            <p className="text-gray-300 font-medium leading-relaxed mb-6">
-              Berdasarkan tren penjualan terbaru, pertahankan stok produk
-              terlaris untuk menjaga konversi tetap optimal.
-            </p>
+            {/* List Saran Dinamis */}
+            <div className="space-y-3 mb-6 flex-1">
+              {aiSuggestions.map((saran, idx) => (
+                <div
+                  key={idx}
+                  className="flex gap-3 items-start bg-white/5 hover:bg-white/10 transition-colors p-4 rounded-2xl border border-white/5"
+                >
+                  <div className="mt-0.5 text-[#94cd28]">
+                    <Sparkles size={18} />
+                  </div>
+                  <p className="text-gray-300 text-sm font-medium leading-relaxed">
+                    {saran}
+                  </p>
+                </div>
+              ))}
+            </div>
 
-            <button className="mt-auto w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 py-4 rounded-2xl font-bold transition-all">
+            {/* Tombol yang diarahkan ke halaman analitik */}
+            <Link
+              href="/dashboard/analitik"
+              className="mt-auto w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 py-4 rounded-2xl font-bold transition-all flex justify-center items-center gap-2 group/btn"
+            >
               Lihat Analisis Detail
-            </button>
+              <ArrowUpRight
+                size={18}
+                className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform"
+              />
+            </Link>
           </div>
         </div>
-
         {/* KPI GRID RIGHT */}
         <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
           {kpiData.map((card, i) => (
@@ -366,6 +442,45 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
             </div>
           ))}
         </div>
+
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-[#0a3d4d]/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300 p-8 text-center space-y-6">
+              <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2 relative">
+                <span className="absolute inset-0 bg-red-400 rounded-full animate-ping opacity-20"></span>
+                <Trash2 size={40} strokeWidth={2.5} className="relative z-10" />
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-black text-[#0a3d4d] mb-3">
+                  Reset Sistem?
+                </h3>
+                <p className="text-gray-500 text-sm leading-relaxed font-medium">
+                  Apakah Anda yakin ingin menghapus{" "}
+                  <strong>seluruh data operasional</strong> secara permanen?
+                  Anda akan dikembalikan ke halaman awal.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setIsResetModalOpen(false)}
+                  disabled={isResetting}
+                  className="flex-1 px-4 py-3.5 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleResetData}
+                  disabled={isResetting}
+                  className="flex-1 px-4 py-3.5 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors shadow-lg cursor-pointer shadow-red-200 disabled:opacity-50 flex justify-center items-center"
+                >
+                  {isResetting ? "Meriset..." : "Ya, Hapus Data"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -57,7 +57,7 @@ function parseExcelDate(excelDate: any) {
       const day = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1; // Di JavaScript, bulan dimulai dari 0 (Jan = 0)
       const year = parseInt(parts[2], 10);
-      
+
       const parsedDate = new Date(year, month, day);
       if (!isNaN(parsedDate.getTime())) return parsedDate;
     }
@@ -87,6 +87,18 @@ export async function uploadTransactionFile(formData: FormData) {
 
     const file = formData.get("file") as File | null;
     if (!file) throw new Error("File tidak ditemukan.");
+
+    // Server-side size validation (50MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    try {
+      // Some runtimes provide a File with .size; ensure we check safely
+      const fileSize = (file as any)?.size ?? null;
+      if (typeof fileSize === "number" && fileSize > MAX_FILE_SIZE) {
+        throw new Error("File terlalu besar (Maks 50MB).");
+      }
+    } catch (e) {
+      throw e;
+    }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });

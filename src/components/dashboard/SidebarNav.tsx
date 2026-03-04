@@ -7,7 +7,6 @@ import {
   Receipt,
   FileText,
   BrainCircuit,
-  LineChart,
   Package,
 } from "lucide-react";
 
@@ -23,9 +22,9 @@ export default function SidebarNav() {
   ];
 
   return (
-    <nav className="flex-1 overflow-y-auto py-8 px-4 space-y-2 relative z-10 custom-scrollbar">
-      <p className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">
-        Menu Utama
+    <nav className="flex-1 overflow-y-auto py-8 px-5 space-y-2 relative z-10 custom-scrollbar">
+      <p className="px-3 text-[11px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-5">
+        Menu Navigasi
       </p>
 
       {navItems.map((item) => {
@@ -38,21 +37,26 @@ export default function SidebarNav() {
           <Link
             key={item.name} 
             href={item.href}
-            className={`group flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 ${
+            className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 overflow-hidden ${
               isActive
-                ? "bg-gradient-to-r from-[#29a343] to-[#238a39] text-white font-medium shadow-lg shadow-[#29a343]/20"
-                : "text-gray-300 hover:text-white hover:bg-white/5 hover:translate-x-1"
+                ? "bg-gradient-to-r from-[#29a343] to-[#1e8031] text-white font-bold shadow-lg shadow-[#29a343]/30 translate-x-1"
+                : "text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-1 font-medium"
             }`}
           >
+            {/* Indikator Garis Menyala (Active State) */}
+            {isActive && (
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#94cd28] shadow-[0_0_12px_#94cd28] rounded-r-full" />
+            )}
+
             <item.icon
-              size={20}
-              className={
+              size={22}
+              className={`transition-all duration-300 ${
                 isActive
-                  ? "text-white"
-                  : "text-gray-400 group-hover:text-[#94cd28] transition-colors"
-              }
+                  ? "text-white scale-110 drop-shadow-md"
+                  : "text-gray-400 group-hover:text-[#94cd28]"
+              }`}
             />
-            <span>{item.name}</span>
+            <span className="tracking-wide">{item.name}</span>
           </Link>
         );
       })}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { decrypt } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ================================
 // 🔐 Helper: get current user
@@ -93,7 +94,7 @@ export async function getDashboardMetrics() {
     totalPendapatan,
     labaKotor,
     labaBersih,
-    totalKerugian, // <-- Kita tambahkan ini untuk dikirim ke web
+    totalKerugian, 
     totalStok,
     clv,
   };
@@ -105,7 +106,7 @@ export async function getAvailableYears() {
   const sales = await prisma.sales.findMany({
     where: { idUser: userId, idDepartemen: deptId, status: "Berhasil" },
     select: { created_at: true },
-    orderBy: { created_at: "desc" }, // Urutkan dari terbaru
+    orderBy: { created_at: "desc" }, 
   });
 
   // Gunakan Set untuk mendapatkan tahun unik
@@ -640,4 +641,103 @@ export async function getAIPredictionAction(yearsAhead: number) {
       projectedProfit: currentRev - currentExp,
     }
   };
+}
+
+export async function getRealAISuggestions(metrics: any) {
+  // 1. Lacak apakah fungsi benar-benar dipanggil
+  console.log("🟢 [DEBUG AI] 1. Fungsi getRealAISuggestions mulai dipanggil...");
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    // 2. Lacak apakah API Key terbaca oleh Next.js
+    console.log("🟢 [DEBUG AI] 2. Status API Key:", apiKey ? "Terbaca (Aman)" : "KOSONG!");
+
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY tidak ditemukan di file .env");
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+      Kamu adalah AI Konsultan Keuangan dan Bisnis tingkat atas.
+      Berikut adalah metrik bisnis klien saat ini:
+      - Laba Kotor: Rp ${metrics.labaKotor}
+      - Laba Bersih: Rp ${metrics.labaBersih}
+      - Total Pendapatan: Rp ${metrics.totalPendapatan}
+      - Total Kerugian: Rp ${metrics.totalKerugian}
+      - Sisa Stok Barang: ${metrics.totalStok} pcs
+      - Customer Lifetime Value (CLV): Rp ${metrics.clv}
+
+      Berikan tepat 3 saran strategis. Balas HANYA dengan format array JSON:
+      ["saran 1", "saran 2", "saran 3"]
+    `;
+
+    // 3. Lacak proses pengiriman ke Google
+    console.log("🟢 [DEBUG AI] 3. Sedang menghubungi server Google Gemini...");
+    
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+    
+    // 4. Lacak jawaban mentah dari AI
+    console.log("🟢 [DEBUG AI] 4. Balasan Mentah Gemini:", responseText);
+    
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    
+    if (jsonMatch) {
+      console.log("🟢 [DEBUG AI] 5. Parsing JSON Berhasil!");
+      return JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error("AI membalas dengan format yang salah.");
+    }
+
+  } catch (error) {
+    // 5. Jika error, ini WAJIB muncul warna merah di terminal
+    console.error("🔴 [DEBUG AI ERROR] Terjadi kegagalan:", error); 
+    
+    return [
+      "Pertahankan stabilitas arus kas Anda bulan ini.",
+      "Lakukan audit pada pengeluaran operasional terbesar.",
+      "Pantau tingkat perputaran stok barang terlaris Anda."
+    ];
+  }
+}
+
+export async function getRealAIAnalysis(metrics: any, years: number) {
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+      Kamu adalah AI Konsultan Bisnis dan Ahli Strategi Perusahaan.
+      Sistem statistik kami baru saja memproyeksikan data bisnis klien untuk ${years} tahun ke depan dengan hasil berikut:
+      - Pertumbuhan Rata-rata Tahunan (CAGR): ${metrics.cagr}%
+      - Proyeksi Pendapatan di Tahun ke-${years}: Rp ${metrics.projectedRevenue}
+      - Proyeksi Laba Bersih di Tahun ke-${years}: Rp ${metrics.projectedProfit}
+
+      Tugasmu:
+      Berikan analisis mendalam namun sangat ringkas berdasarkan angka proyeksi di atas.
+      
+      ATURAN WAJIB: Balas HANYA dengan format objek JSON murni seperti ini (tanpa markdown blok seperti \`\`\`json):
+      {
+        "summary": "Kesimpulan eksekutif yang tajam mengenai tren ini (maksimal 3 kalimat)...",
+        "opportunity": "Satu rekomendasi peluang strategis yang harus dieksekusi (maksimal 2 kalimat)...",
+        "risk": "Satu mitigasi risiko utama yang harus diwaspadai (maksimal 2 kalimat)..."
+      }
+    `;
+
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text().trim();
+    responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("Gagal mengambil analisis AI:", error);
+    return {
+      summary: `Berdasarkan data historis, sistem memproyeksikan pertumbuhan sebesar ${metrics.cagr}% selama ${years} tahun ke depan.`,
+      opportunity: "Fokus pada stabilisasi operasional dan perluasan pangsa pasar secara bertahap.",
+      risk: "Pantau fluktuasi biaya operasional yang dapat menekan margin laba di masa depan."
+    };
+  }
 }

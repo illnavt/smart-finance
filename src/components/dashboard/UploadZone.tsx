@@ -47,8 +47,9 @@ export default function Dashboard() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg("File terlalu besar (Maks 10MB).");
+    // Ubah limit dari 10MB -> 50MB
+    if (file.size > 50 * 1024 * 1024) {
+      setErrorMsg("File terlalu besar (Maks 50MB).");
       return;
     }
 

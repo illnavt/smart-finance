@@ -15,17 +15,16 @@ export default async function LaporanPage() {
   });
 
   const cashFlows = await prisma.cashFlow.findMany({
-    where: { 
-      idUser: userId, 
-      idDepartemen: userProfile?.idDepartemen 
+    where: {
+      idUser: userId,
+      idDepartemen: userProfile?.idDepartemen,
     },
     orderBy: { tanggal: "desc" },
   });
 
-  // Serialisasi data tanggal ke ISO String (hindari error Hydration Next.js)
   const serializedData = cashFlows.map((item) => ({
     ...item,
-    tanggal: item.tanggal.toISOString()
+    tanggal: item.tanggal.toISOString(),
   }));
 
   return <LaporanClient initialData={serializedData} />;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, LogOut, CalendarDays, ShieldCheck } from "lucide-react"; // <-- Import disesuaikan
+import { Bell, LogOut, CalendarDays, ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { decrypt } from "@/lib/session";
@@ -41,9 +41,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-[#f4f7f6] overflow-hidden font-sans selection:bg-[#29a343]/30">
-      {/* ================= SIDEBAR ================= */}
       <aside className="w-[280px] bg-gradient-to-b from-[#0a3d4d] to-[#062630] text-white flex flex-col shadow-[10px_0_40px_rgba(0,0,0,0.08)] z-20 hidden md:flex relative border-r border-[#0a3d4d]">
-        {/* Dekorasi Cahaya Halus di Latar Belakang Sidebar */}
         <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-white/10 to-transparent pointer-events-none opacity-50" />
 
         <div className="h-28 flex items-center justify-center border-b border-white/5 relative z-10">
@@ -58,10 +56,8 @@ export default async function DashboardLayout({
 
         <SidebarNav />
 
-        {/* ==== PROFIL SIDEBAR BAWAH + TOMBOL LOGOUT ==== */}
         <div className="p-6 relative z-10 border-t border-white/5 bg-black/10">
           <div className="flex items-center justify-between bg-white/5 hover:bg-white/10 transition-colors duration-300 p-2.5 rounded-2xl border border-white/10 group backdrop-blur-sm">
-            {/* Info User */}
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-[#94cd28] to-[#29a343] flex items-center justify-center shadow-lg font-black text-white text-lg">
                 {userName.substring(0, 1).toUpperCase()}
@@ -76,17 +72,16 @@ export default async function DashboardLayout({
               </div>
             </div>
 
-            {/* Tombol Logout */}
             <form action={logoutAction}>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 title="Keluar dari sistem"
                 className="p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/20 rounded-xl transition-all duration-300 flex-shrink-0 cursor-pointer group/btn hover:scale-105 active:scale-95"
               >
-                <LogOut 
-                  size={18} 
-                  strokeWidth={2.5} 
-                  className="group-hover/btn:-translate-x-0.5 transition-transform duration-300" 
+                <LogOut
+                  size={18}
+                  strokeWidth={2.5}
+                  className="group-hover/btn:-translate-x-0.5 transition-transform duration-300"
                 />
               </button>
             </form>
@@ -94,11 +89,8 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* ================= KONTEN UTAMA ================= */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* HEADER */}
         <header className="h-28 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-10 z-10 sticky top-0 shadow-sm">
-          {/* BAGIAN KIRI HEADER: GREETING & STATUS (Pengganti Search Bar) */}
           <div className="hidden sm:flex flex-col">
             <h2 className="text-2xl font-black text-[#0a3d4d] tracking-tight">
               Halo, {userName}!{" "}
@@ -129,7 +121,6 @@ export default async function DashboardLayout({
             </div>
           </div>
 
-          {/* BAGIAN KANAN HEADER: NOTIFIKASI & AVATAR KECIL */}
           <div className="flex items-center gap-6 ml-auto">
             <button className="relative p-3 text-gray-400 hover:text-[#29a343] hover:bg-[#29a343]/10 rounded-2xl transition-all duration-300">
               <Bell size={22} strokeWidth={2.5} />
@@ -154,7 +145,6 @@ export default async function DashboardLayout({
           </div>
         </header>
 
-        {/* AREA KONTEN PAGE */}
         <main className="flex-1 overflow-y-auto relative p-10 custom-scrollbar">
           <div className="max-w-[1600px] mx-auto">{children}</div>
         </main>

@@ -14,35 +14,33 @@ export default async function TransaksiPage() {
     select: { idDepartemen: true },
   });
 
-  // Ambil transaksi
   const transactions = await prisma.sales.findMany({
-    where: { 
-      idUser: userId, 
-      idDepartemen: userProfile?.idDepartemen 
+    where: {
+      idUser: userId,
+      idDepartemen: userProfile?.idDepartemen,
     },
     include: { product: true },
     orderBy: { created_at: "desc" },
   });
 
-  // Ambil daftar barang yang stoknya lebih dari 0 untuk dropdown
   const products = await prisma.product.findMany({
     where: {
       idUser: userId,
       idDepartemen: userProfile?.idDepartemen,
-      stok: { gt: 0 } // Hanya tampilkan barang yang stoknya ada
+      stok: { gt: 0 },
     },
-    select: { id: true, name: true, price: true, stok: true }
+    select: { id: true, name: true, price: true, stok: true },
   });
 
   const serializedTransactions = transactions.map((t) => ({
     ...t,
-    created_at: t.created_at.toISOString()
+    created_at: t.created_at.toISOString(),
   }));
 
   return (
-    <TransaksiClient 
-      initialTransactions={serializedTransactions} 
-      products={products} 
+    <TransaksiClient
+      initialTransactions={serializedTransactions}
+      products={products}
     />
   );
 }

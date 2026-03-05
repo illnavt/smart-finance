@@ -32,7 +32,7 @@ import {
   getRevenueChart,
   getAvailableYears,
   resetDataAction,
-  getRealAISuggestions
+  getRealAISuggestions,
 } from "@/app/actions/dashboard";
 import Link from "next/link";
 
@@ -55,12 +55,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
 
       setMetrics(metricData);
       setAvailableYears(years);
-
-      if (years.length > 0) {
-        setRange(String(years[0]));
-      } else {
-        setRange("semua");
-      }
     }
     init();
   }, []);
@@ -84,57 +78,31 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
       setIsResetModalOpen(false);
       window.location.href = "/dashboard";
     } catch (error) {
-      console.error("Error resetting data:", error);
       setIsResetting(false);
     }
   };
 
-  // =======================================================
-  // 1. PINDAHKAN USEMEMO KE SINI (Di atas blok if loading)
-  // =======================================================
-  const aiSuggestions = useMemo(() => {
-    if (!metrics) return [];
-    const hints = [];
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(true);
 
-    // Analisis Profitabilitas
-    if (metrics.totalKerugian > 0) {
-      hints.push(
-        "Terdeteksi kerugian operasional. Tinjau kembali pos pengeluaran operasional terbesar Anda bulan ini.",
-      );
-    } else if (metrics.labaBersih > 0) {
-      hints.push(
-        "Laba bersih positif dan sehat. Pertahankan rasio pengeluaran dan strategi penjualan saat ini.",
-      );
+  useEffect(() => {
+    if (!metrics) return;
+
+    async function fetchAI() {
+      setIsAiLoading(true);
+      try {
+        const saranDariAI = await getRealAISuggestions(metrics);
+        setAiSuggestions(saranDariAI);
+      } catch (error) {
+        setAiSuggestions(["Sistem AI sedang sibuk, silakan coba lagi nanti."]);
+      } finally {
+        setIsAiLoading(false);
+      }
     }
 
-    // Analisis Stok
-    if (metrics.totalStok < 100) {
-      hints.push(
-        "Peringatan: Total fisik barang menipis. Segera lakukan pemesanan ulang (restock) untuk produk terlaris.",
-      );
-    } else {
-      hints.push(
-        "Kapasitas stok gudang secara keseluruhan dalam batas aman untuk memenuhi permintaan pasar.",
-      );
-    }
-
-    // Analisis Retensi & Pelanggan (CLV)
-    if (metrics.clv > 50000) {
-      hints.push(
-        "Nilai LTV pelanggan cukup tinggi. Tawarkan program loyalitas untuk mempertahankan pelanggan VIP Anda.",
-      );
-    } else {
-      hints.push(
-        "Tingkatkan promosi *bundling* untuk mendorong pelanggan berbelanja lebih banyak per transaksi.",
-      );
-    }
-
-    return hints.slice(0, 3);
+    fetchAI();
   }, [metrics]);
 
-  // =======================================================
-  // 2. EARLY RETURN TETAP BERADA DI BAWAH SEMUA HOOKS
-  // =======================================================
   if (loading && !metrics)
     return (
       <div className="p-10 text-center animate-pulse font-bold text-[#0a3d4d]">
@@ -142,9 +110,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
       </div>
     );
 
-  // =======================================================
-  // 3. VARIABEL YANG BERGANTUNG PADA DATA (metrics.xxx) DI BAWAHNYA
-  // =======================================================
   const kpiData = [
     {
       title: "Laba Kotor",
@@ -243,7 +208,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
 
   return (
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-[#0a3d4d]">
@@ -280,7 +244,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* ================= MODERN CHART SECTION ================= */}
       <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm h-112.5">
         {chartData.length === 0 && !loading ? (
           <div className="h-full w-full flex items-center justify-center flex-col text-gray-400">
@@ -358,11 +321,8 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
         )}
       </div>
 
-      {/* ================= BOTTOM GRID ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* AI CARD LEFT */}
         <div className="lg:col-span-4 bg-linear-to-br from-[#0a3d4d] to-[#062630] p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group flex flex-col">
-          {/* Efek Cahaya Latar */}
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#29a343]/20 rounded-full blur-3xl group-hover:bg-[#94cd28]/30 transition-all duration-700"></div>
 
           <div className="relative z-10 flex flex-col h-full">
@@ -379,7 +339,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
               Saran AI Pintar
             </h4>
 
-            {/* List Saran Dinamis */}
             <div className="space-y-3 mb-6 flex-1">
               {aiSuggestions.map((saran, idx) => (
                 <div
@@ -396,7 +355,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
               ))}
             </div>
 
-            {/* Tombol yang diarahkan ke halaman analitik */}
             <Link
               href="/dashboard/analitik"
               className="mt-auto w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 py-4 rounded-2xl font-bold transition-all flex justify-center items-center gap-2 group/btn"
@@ -409,7 +367,6 @@ export default function DashboardMetrics({ userId }: { userId: string }) {
             </Link>
           </div>
         </div>
-        {/* KPI GRID RIGHT */}
         <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
           {kpiData.map((card, i) => (
             <div

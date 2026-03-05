@@ -35,7 +35,7 @@ export default function SidebarNav() {
 
         return (
           <Link
-            key={item.name} 
+            key={item.name}
             href={item.href}
             className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 overflow-hidden ${
               isActive
@@ -43,7 +43,6 @@ export default function SidebarNav() {
                 : "text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-1 font-medium"
             }`}
           >
-            {/* Indikator Garis Menyala (Active State) */}
             {isActive && (
               <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#94cd28] shadow-[0_0_12px_#94cd28] rounded-r-full" />
             )}

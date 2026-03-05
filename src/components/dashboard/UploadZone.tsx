@@ -1,4 +1,3 @@
-// src/app/dashboard/page.tsx
 "use client";
 
 import { useState, useRef, useTransition } from "react";
@@ -47,9 +46,8 @@ export default function Dashboard() {
       return;
     }
 
-    // Ubah limit dari 10MB -> 50MB
     if (file.size > 50 * 1024 * 1024) {
-      setErrorMsg("File terlalu besar (Maks 50MB).");
+      setErrorMsg("File terlalu besar (Maks 5MB).");
       return;
     }
 
@@ -59,7 +57,6 @@ export default function Dashboard() {
     startTransition(async () => {
       try {
         await uploadTransactionFile(formData);
-        // Memaksa refresh halaman agar Layout mendeteksi data baru di DB
         window.location.reload();
       } catch (error: any) {
         console.error(error);
@@ -87,7 +84,6 @@ export default function Dashboard() {
         </form>
       </div>
 
-      {/* Konten Utama */}
       <main className="flex-grow flex flex-col items-center justify-center p-4 lg:p-8 relative z-10">
         <div className="w-full max-w-4xl bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[3rem] p-10 md:p-20 flex flex-col items-center relative">
           <div className="text-center mb-12">

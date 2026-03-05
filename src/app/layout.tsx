@@ -16,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className="scroll-smooth">
-      <body className={`${inter.className} bg-[#fbffee] text-[#0a3d4d] overflow-x-hidden relative min-h-screen`}>
+      <body
+        className={`${inter.className} bg-[#fbffee] text-[#0a3d4d] overflow-x-hidden relative min-h-screen`}
+      >
         <div className="absolute w-[800px] h-[800px] -left-[400px] -top-[100px] bg-[#18983c] opacity-[0.12] rounded-full -z-10 blur-[80px]"></div>
         {children}
       </body>

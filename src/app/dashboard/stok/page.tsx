@@ -15,9 +15,9 @@ export default async function StokPage() {
   });
 
   const products = await prisma.product.findMany({
-    where: { 
-      idUser: userId, 
-      idDepartemen: userProfile?.idDepartemen 
+    where: {
+      idUser: userId,
+      idDepartemen: userProfile?.idDepartemen,
     },
     orderBy: { created_at: "desc" },
   });

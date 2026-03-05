@@ -6,9 +6,6 @@ import { cookies } from "next/headers";
 import { decrypt } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 
-/**
- * FUNGSI PINTAR: Mencari nilai kolom berdasarkan Fuzzy Matching
- */
 function findValue(
   row: any,
   possibleNames: string[],
@@ -25,9 +22,6 @@ function findValue(
   return defaultValue;
 }
 
-/**
- * FUNGSI PINTAR: Pembersihan angka
- */
 function cleanNumber(val: any): number {
   if (val === null || val === undefined) return 0;
   if (typeof val === "number") return val;
@@ -35,27 +29,18 @@ function cleanNumber(val: any): number {
   return isNaN(num) ? 0 : num;
 }
 
-/**
- * FUNGSI PINTAR: Konversi tanggal
- */
-/**
- * FUNGSI PINTAR: Konversi tanggal dengan dukungan DD/MM/YYYY
- */
 function parseExcelDate(excelDate: any) {
   if (!excelDate) return new Date();
 
-  // 1. Jika dibaca Excel sebagai Serial Number (angka)
   if (typeof excelDate === "number") {
     return new Date(Math.round((excelDate - 25569) * 86400 * 1000));
   }
 
-  // 2. Jika dibaca sebagai Teks (contoh: "24/09/2025")
   if (typeof excelDate === "string") {
     const parts = excelDate.split("/");
-    // Cek apakah formatnya dipisah garis miring dan ada 3 bagian
     if (parts.length === 3) {
       const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // Di JavaScript, bulan dimulai dari 0 (Jan = 0)
+      const month = parseInt(parts[1], 10) - 1;
       const year = parseInt(parts[2], 10);
 
       const parsedDate = new Date(year, month, day);
@@ -63,7 +48,6 @@ function parseExcelDate(excelDate: any) {
     }
   }
 
-  // 3. Fallback bawaan
   let date = new Date(excelDate);
   return isNaN(date.getTime()) ? new Date() : date;
 }
@@ -88,10 +72,8 @@ export async function uploadTransactionFile(formData: FormData) {
     const file = formData.get("file") as File | null;
     if (!file) throw new Error("File tidak ditemukan.");
 
-    // Server-side size validation (50MB)
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
     try {
-      // Some runtimes provide a File with .size; ensure we check safely
       const fileSize = (file as any)?.size ?? null;
       if (typeof fileSize === "number" && fileSize > MAX_FILE_SIZE) {
         throw new Error("File terlalu besar (Maks 50MB).");
@@ -145,7 +127,6 @@ export async function uploadTransactionFile(formData: FormData) {
             findValue(row, ["hargabelipokok", "hpp", "modal"]),
           );
 
-          // MENGGUNAKAN UPSERT DENGAN ID_NAME_DEPT (Best Practice)
           await prisma.product.upsert({
             where: {
               id_name_dept: { name: namaProduk, idDepartemen: currentDeptId },
@@ -172,7 +153,6 @@ export async function uploadTransactionFile(formData: FormData) {
           const qty = cleanNumber(findValue(row, ["qty", "jumlah"]));
           const tanggal = parseExcelDate(findValue(row, ["tanggal", "date"]));
 
-          // Sinkronisasi produk otomatis agar idProduct valid
           const produk = await prisma.product.upsert({
             where: {
               id_name_dept: { name: namaProduk, idDepartemen: currentDeptId },
@@ -195,7 +175,7 @@ export async function uploadTransactionFile(formData: FormData) {
               idProduct: produk.id,
               amount: qty,
               totalPrice: hargaSatuan * qty,
-              customerName: String(rawCustomer), // Menghindari error tipe data
+              customerName: String(rawCustomer),
               status: "Berhasil",
               descriptions: `Import Multi-Sheet: ${file.name}`,
               created_at: tanggal,

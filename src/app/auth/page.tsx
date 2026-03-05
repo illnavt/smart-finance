@@ -43,21 +43,19 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (registerState === "success" && isFlipped) {
-      setIsFlipped(false); // Balikkan kartu ke mode Log In
-      setShowSuccessPopup(true); // Munculkan pop-up
+      setIsFlipped(false);
+      setShowSuccessPopup(true);
 
-      // Sembunyikan pop-up otomatis setelah 4 detik
       const timer = setTimeout(() => {
         setShowSuccessPopup(false);
       }, 4000);
 
-      return () => clearTimeout(timer); // Bersihkan timer
+      return () => clearTimeout(timer);
     }
   }, [registerState, isFlipped]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e8f7ec] via-[#f2fdf5] to-[#d1f5de] p-4 relative overflow-hidden">
-      {/* --- UI POP-UP SUKSES --- */}
       {showSuccessPopup && (
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[200] bg-white border-l-4 border-[#2eb85c] px-6 py-4 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex items-center gap-4 transition-all duration-500 animate-[float_0.5s_ease-out]">
           <div className="bg-[#e8f7ec] p-2 rounded-full">
@@ -103,7 +101,6 @@ export default function AuthPage() {
           </button>
         </div>
       )}
-      {/* --- AKHIR UI POP-UP --- */}
 
       <div className="absolute top-20 left-10 w-3 h-3 bg-green-300 rounded-full animate-pulse blur-[1px]"></div>
       <div className="absolute top-32 left-1/4 w-4 h-4 bg-green-200 rounded-full animate-pulse blur-[2px]"></div>
@@ -137,10 +134,8 @@ export default function AuthPage() {
             <div
               className={`relative w-full preserve-3d transition-transform duration-700 ease-in-out grid ${isFlipped ? "rotate-y-180" : ""}`}
             >
-              {/* --- BAGIAN KARTU DEPAN (LOG IN) --- */}
               <div className="col-start-1 row-start-1 backface-hidden w-full bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] rounded-[2.5rem] p-10">
                 <div className="flex flex-col items-center justify-center mb-10">
-                  {/* Bungkus dengan Link */}
                   <Link href="/">
                     <Image
                       src="/images/logo.png"
@@ -187,7 +182,7 @@ export default function AuthPage() {
                       </svg>
                     </div>
                     <input
-                      name="identifier" // <-- Diubah agar bisa menerima Username atau Email
+                      name="identifier"
                       type="text"
                       placeholder="Email atau Username"
                       className="text-[#000000] block w-full pl-12 pr-4 py-4 bg-white border border-[#bbf7d0] rounded-full text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4ade80]/50 focus:border-[#4ade80] transition-all shadow-sm"
@@ -279,10 +274,8 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {/* --- BAGIAN KARTU BELAKANG (SIGN UP) --- */}
               <div className="col-start-1 row-start-1 backface-hidden rotate-y-180 w-full bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] rounded-[2.5rem] p-10">
                 <div className="flex flex-col items-center justify-center mb-6">
-                  {/* Bungkus dengan Link */}
                   <Link href="/">
                     <Image
                       src="/images/logo.png"

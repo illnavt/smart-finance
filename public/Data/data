@@ -1,8 +1,0 @@
-DATABASE_URL="postgresql://postgres:Saga12345@localhost:5432/kepin_finance_db_test?schema=public"
-
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="kepinsk2025w6"
-
-JWT_SECRET="miz9tu07"
-SESSION_SECRET="kepin-sc-25"
-GEMINI_API_KEY=AIzaSyAU-5vZvSwb9y37lfdNic2qvQ058-O-6mg
